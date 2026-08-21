@@ -1,0 +1,119 @@
+// Tally's data model. This file is the single source of truth for the
+// database — `prisma migrate` turns it into Postgres tables, and
+// `prisma generate` turns it into typed TypeScript query functions.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Connection URL lives in prisma.config.ts (Prisma 7 style), read from
+// the DATABASE_URL environment variable — never committed to git.
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  expenses     Expense[]
+  budgets      Budget[]
+  groupMembers GroupMember[]
+  owedSplits   Split[]       @relation("SplitOwedBy")
+}
+
+// A spending category: Food, Delivery, Transport, Gas, Rent,
+// Subscriptions, Fun, Misc. Seeded with defaults; users can add more.
+model Category {
+  id     String  @id @default(cuid())
+  name   String
+  emoji  String? // cosmetic, shows in the UI
+  userId String? // null = a built-in default category
+
+  expenses Expense[]
+  budgets  Budget[]
+
+  @@unique([name, userId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Decimal  @db.Decimal(10, 2) // money is NEVER a float — see LEARNING.md
+  description String
+  date        DateTime @default(now())
+  merchant    String? // raw text like "CHIPOTLE 0231", kept for the AI categorizer
+
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  // How the category was assigned — lets us measure AI accuracy later.
+  categorySource CategorySource @default(MANUAL)
+
+  // If shared with a group, the splits hang off the expense.
+  groupId String?
+  group   Group?  @relation(fields: [groupId], references: [id])
+  splits  Split[]
+}
+
+enum CategorySource {
+  MANUAL // user picked it
+  AI     // LLM assigned it
+  RULE   // merchant-memory rule assigned it
+}
+
+// A monthly cap per category per user, e.g. Delivery <= $150 for 2026-09.
+model Budget {
+  id        String  @id @default(cuid())
+  month     String // "2026-09" — one row per user+category+month
+  capAmount Decimal @db.Decimal(10, 2)
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([userId, categoryId, month])
+}
+
+// ---- Splitting (the Splitwise half) ----
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String // "Apartment 4B", "Tahoe trip"
+  createdAt DateTime @default(now())
+
+  members  GroupMember[]
+  expenses Expense[]
+}
+
+model GroupMember {
+  id      String @id @default(cuid())
+  userId  String
+  groupId String
+  user    User   @relation(fields: [userId], references: [id])
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+// One person's share of one shared expense. The payer is the expense's
+// user; each split row says who owes what toward it. Settle-up math
+// (who ultimately pays whom, minimized) is computed from these rows —
+// derived data, so it's an algorithm, not a table.
+model Split {
+  id      String  @id @default(cuid())
+  amount  Decimal @db.Decimal(10, 2)
+  settled Boolean @default(false)
+
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id])
+  owedById  String
+  owedBy    User    @relation("SplitOwedBy", fields: [owedById], references: [id])
+
+  @@unique([expenseId, owedById])
+}
