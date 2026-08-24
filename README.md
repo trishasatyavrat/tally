@@ -7,13 +7,13 @@ fewest possible payments. An LLM categorizes expenses and turns your
 numbers into a readable monthly plan — the math is always code; the AI
 only writes the words.
 
-Built because I track my own budget with it. Splitwise meets a budget
-app, simple enough to actually use.
+Building it because I want to track my own budget with it. Splitwise meets a budget
+app, simple enough to actually use as a college student.
 
 ## Stack
 
 Next.js (App Router) · TypeScript · React · Tailwind · Prisma ·
-Postgres. Deploy: Vercel. AI: Claude API for categorization + plan
+Postgres. Deploy (plan): Vercel. AI: Claude API for categorization + plan
 narration, with a measured accuracy eval.
 
 ## Status
