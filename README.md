@@ -18,11 +18,12 @@ narration, with a measured accuracy eval.
 
 ## Status
 
-Day 1 — scaffold + data model. Roadmap:
+Working locally: you can add expenses, set monthly caps per category,
+and see spend-against-cap bars for the current month.
 
 - [x] Next.js scaffold, Prisma schema (User/Expense/Category/Budget/Group/Split)
-- [ ] Local Postgres + first migration + seed categories
-- [ ] Expense entry, list, dashboard with category cap bars
+- [x] Local Postgres + first migration + seeded categories
+- [x] Expense entry, recent list, dashboard with category cap bars
 - [ ] CSV import
 - [ ] AI categorization + merchant-memory fallback + accuracy eval
 - [ ] Groups, splitting, settle-up minimization algorithm
@@ -33,11 +34,27 @@ Day 1 — scaffold + data model. Roadmap:
 
 ```bash
 npm install
-npm run dev
+createdb tally_dev                  # local Postgres
+echo 'DATABASE_URL="postgresql://localhost:5432/tally_dev"' > .env
+npx prisma migrate dev              # create the tables
+psql -d tally_dev -f prisma/seed.sql  # seed the default categories
+npm run dev                         # http://localhost:3000
 ```
 
-Needs a `DATABASE_URL` in `.env` (Postgres) — see `prisma/schema.prisma`
-for the data model. `docs/LEARNING.md` is the running lab notebook.
+`docs/LEARNING.md` is the running lab notebook — what each piece does,
+why it is built that way, and the bugs hit along the way.
+
+## Design notes
+
+- **Money is `Decimal`, never `float`.** Amounts travel as strings from
+  the form into Postgres so they never pass through a JS float.
+- **Category totals are aggregated in the database** (`groupBy` +
+  `_sum`), not summed in JavaScript — one round-trip, exact arithmetic.
+- **Every expense records how it was categorized** (`MANUAL` / `AI` /
+  `RULE`), so when LLM categorization lands its accuracy is measurable
+  against human labels rather than assumed.
+- **Settle-up is computed, not stored.** Who-owes-whom is derived from
+  the split rows, so there is never a second copy of the truth to drift.
 
 ## Not covered (on purpose)
 

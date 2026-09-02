@@ -108,3 +108,66 @@ default categories now live in it via a raw-SQL seed (`prisma/seed.sql`).
 - postgresqltutorial.com — INSERT / ON CONFLICT sections
 - The Postgres docs note on NULLs in unique indexes (search
   "unique index null distinct")
+
+---
+
+## Day 3 (2026-09-02): The app becomes real - dashboard + expense entry
+
+**What we built:** a working dashboard at `/` that reads this month's
+expenses out of Postgres, aggregates spend per category, draws cap bars,
+and lets you add expenses and set budget caps. `npm run dev` and it
+works.
+
+**The concepts:**
+
+- **React Server Components.** `page.tsx` is a component that runs *on
+  the server*. It queries the database directly - no API route, no
+  fetch(), no loading spinner - and ships finished HTML to the browser.
+  This is the default in Next.js's App Router and it collapses a whole
+  layer that older React apps needed.
+
+- **Server Actions.** `addExpense` and `setBudget` live in a file marked
+  `"use server"`. They are called straight from a `<form action={...}>`
+  in the browser, but execute server-side; Next.js handles the network
+  round-trip invisibly. The important consequence: *validation must
+  happen inside the action*, because the client can always be bypassed.
+  Never trust anything that arrives in a FormData.
+
+- **The bug we hit, and why it is a good bug.** The first run returned
+  HTTP 500: "Server Actions must be async functions." The cause was a
+  sync helper (`currentMonth`) exported from the `"use server"` file -
+  Next.js requires *every* export from such a file to be an async
+  action, because each one becomes a callable server endpoint. Moving
+  it to `lib/dates.ts` fixed it. Worth remembering as a rule: a
+  "use server" file is an API surface, not a utilities file.
+
+- **Aggregate in the database, not in JavaScript.** Category totals use
+  `groupBy` with `_sum`, so Postgres does the arithmetic and returns 8
+  rows instead of us fetching every expense and summing in a loop. One
+  round-trip instead of N, and Postgres sums Decimals exactly where JS
+  floats would drift.
+
+- **Decimal at the boundary.** `amount` stays a *string* from the form
+  all the way into Prisma, so it lands in the Decimal column without
+  ever becoming a float. It converts to a number only in `formatUSD`,
+  at the moment of display, and never before arithmetic.
+
+- **The dev-server connection leak.** `lib/db.ts` caches the Prisma
+  client on `globalThis` because Next.js re-evaluates modules on every
+  file save in development - without the cache, each save opens another
+  connection pool until Postgres starts refusing connections. Prisma 7
+  also now requires an explicit driver adapter (`@prisma/adapter-pg`);
+  the client no longer ships its own database driver.
+
+**Do now:**
+1. `npm run dev`, add a few real expenses from today, set a cap on
+   Delivery, and watch the bar turn red when you cross it.
+2. Open `page.tsx` and find the three database queries. Why is
+   `Promise.all` used instead of awaiting them one at a time?
+3. Try submitting an amount like `12.999` - the server action rejects
+   it. Find the regex that does that and reason about what it allows.
+
+**Resources:**
+- Next.js docs: "Server Components" and "Server Actions and Mutations"
+- Prisma docs: `groupBy` aggregation
+- Prisma 7 driver adapters page (why `@prisma/adapter-pg` exists)
