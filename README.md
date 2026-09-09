@@ -26,7 +26,8 @@ and see spend-against-cap bars for the current month.
 - [x] Expense entry, recent list, dashboard with category cap bars
 - [ ] CSV import
 - [ ] AI categorization + merchant-memory fallback + accuracy eval
-- [ ] Groups, splitting, settle-up minimization algorithm
+- [x] Settle-up algorithm (net balances -> fewest payments, property-tested)
+- [ ] Groups + splitting UI on top of it
 - [ ] Monthly plan suggestions + digest
 - [ ] Auth, deploy, CI
 
@@ -39,6 +40,7 @@ echo 'DATABASE_URL="postgresql://localhost:5432/tally_dev"' > .env
 npx prisma migrate dev              # create the tables
 psql -d tally_dev -f prisma/seed.sql  # seed the default categories
 npm run dev                         # http://localhost:3000
+npm test                            # unit + property tests
 ```
 
 `docs/LEARNING.md` is the running lab notebook — what each piece does,

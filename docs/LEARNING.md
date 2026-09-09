@@ -171,3 +171,68 @@ works.
 - Next.js docs: "Server Components" and "Server Actions and Mutations"
 - Prisma docs: `groupBy` aggregation
 - Prisma 7 driver adapters page (why `@prisma/adapter-pg` exists)
+
+---
+
+## Day 4 (2026-09-09): The settle-up algorithm
+
+**What we built:** `src/lib/settle.ts` - the debt-simplification
+algorithm at the heart of the splitting feature - plus 8 tests
+(`npm test`), including a property test over 200 randomly generated
+groups.
+
+**The problem:** after a trip, A owes B $20, B owes C $20, C owes A $5.
+Paying each debt directly is three transfers, but B is net flat - owed
+20, owes 20 - so it collapses to A pays C $15. Nobody should make
+payments that cancel each other out.
+
+**The concepts:**
+
+- **Net first, then match.** Reduce every individual split to one net
+  balance per person (negative = owes, positive = is owed). Then
+  repeatedly pay the largest debtor's debt to the largest creditor.
+  Sorting by size is what makes each step settle at least one person
+  *completely*, which caps the result at n-1 transfers for n people.
+
+- **It is a greedy heuristic, and that is the honest framing.** Finding
+  the true minimum number of transactions is NP-hard - it reduces to
+  set partitioning. Splitwise and every other app use a greedy pass
+  like this one. Claiming "optimal" would be wrong; "never worse than
+  n-1, optimal in common cases" is what is actually true. Worth being
+  precise about in an interview.
+
+- **Integer cents, never floats.** Balances are whole cents, so sums
+  are exact and the "did everything zero out?" assertion is a real
+  equality check rather than an epsilon comparison. Same principle as
+  the Decimal column in the database, one layer up.
+
+- **Property testing beats example testing here.** The algorithm is
+  free to choose *which* payments to emit, so asserting a specific
+  output would lock in an implementation detail. What actually matters
+  is the invariant: after applying the transfers, every balance is
+  zero, and there are at most n-1 of them. The 200-group random test
+  checks that invariant instead of any particular answer.
+
+- **The bug the tests caught, which is a classic JS trap.**
+  `array.filter()` returns a new *array* but the same *object
+  references*. The first version filtered creditors and then did
+  `creditors[j].amountCents -= pay`, which mutated the caller's
+  balance objects. Every unit test with hardcoded expectations still
+  passed - only the tests that re-read the input afterward failed.
+  Fix: `.map(b => ({...b}))` to copy. General rule: **if a function
+  mutates, it must own the objects it mutates.**
+
+**Do now:**
+1. `npm test` - watch all 8 pass.
+2. Delete the `.map((b) => ({ ...b }))` copy and rerun. Note that six
+   tests still pass; only the two that inspect balances afterward
+   catch it. That is what a shallow-copy bug looks like in the wild.
+3. Work the A->B->C example on paper and confirm the algorithm's
+   answer matches yours.
+
+**Resources:**
+- "Minimum cash flow among friends" (the standard write-up of this
+  problem, usually as a greedy or DP exercise)
+- Splitwise's blog on debt simplification - same approach, production
+  scale
+- Vitest docs: `describe`/`it`/`expect` basics
