@@ -310,3 +310,72 @@ deduplication), the `/import` page and its Server Action, a shared
 - RFC 4180 (the CSV "spec", two pages)
 - Postgres docs, INSERT ... ON CONFLICT - what `skipDuplicates` compiles to
 - Next.js docs: Server Actions -> "Forms" (file inputs are ordinary FormData)
+
+---
+
+## Day 6 (2026-09-18): Merchant memory - the categorizer that needs no AI
+
+**What we built:** `src/lib/merchant.ts` (`normalizeMerchant`: bank
+description -> stable merchant key), `src/lib/categorize/rules.ts`
+(`buildRuleMap` from labeled history, `categorizeByRules` to apply it),
+a category picker on every dashboard row (`setCategory`, marked
+MANUAL), an "apply merchant rules" action, rules run automatically after
+every CSV import, and a fix: the dashboard was being prerendered at
+build time.
+
+**The concepts:**
+
+- **The rule is the history.** There is no rules table. When you file
+  "CHIPOTLE 0231 IRVINE CA" under Food, that row *is* the rule; the
+  next Chipotle looks up the normalized key "chipotle" in your labeled
+  history and takes the majority category. Store facts, compute
+  conclusions (Day 1) - a separate rules table would need syncing with
+  the expenses that justify it, and would drift.
+
+- **Only human labels teach.** `loadRules` reads rows with
+  `categorySource = MANUAL` only. If RULE-labeled rows could vote, one
+  wrong guess would reinforce itself forever - a feedback loop. This is
+  why `categorySource` was in the schema from Day 1: it is not just for
+  measuring the AI later, it is what keeps the rules honest now.
+
+- **Normalization is a pile of heuristics, and that is fine.**
+  Processor prefixes (`SQ *`, `TST*`, `PP*`), trailing transaction ids
+  (`*2K3AB1` - only if it contains a digit, or "UBER *EATS" loses
+  "eats"), store numbers, dates, web addresses, and a trailing "city
+  ST zip". The city rule was the hard one: two-word cities ate "eats"
+  from "uber eats ... ca". The fix is a *precondition*: strip the city
+  only when the token before it contains a digit (a store number). Each
+  heuristic is one line, each has a test row, and the test file is the
+  spec. When a bank format breaks it, add a row and a line.
+
+- **Majority vote, ties to the most recent.** If you filed Target as
+  Misc twice and Food once, Target is Misc. Ties go to the newest label
+  because your latest decision is the best guess at your current
+  policy. `buildRuleMap` is pure so this is unit-tested without a
+  database.
+
+- **One UPDATE per category, not per row.** `categorizeByRules` groups
+  the pending expenses by target category and issues `updateMany` per
+  group inside one transaction: 8 statements for 500 rows, not 500.
+  And `setCategory` filters by `userId` as well as `id` - a client can
+  send any expense id, so ownership is enforced in the WHERE clause,
+  never assumed.
+
+- **The prerender bug.** `next build` listed `/` as `○ (Static)`: the
+  dashboard ran its database queries once *at build time* and would
+  have served that snapshot forever. `export const dynamic =
+  "force-dynamic"` fixes it. Read the build output's route table every
+  time - it tells you what Next.js decided about each page.
+
+**Do now:**
+1. `npm run dev`. Label three recent expenses by hand, import a CSV
+   containing the same merchants, and watch them arrive categorized
+   with a RULE badge.
+2. Add a bank description of your own to `merchant.test.ts` and make
+   it pass.
+3. `npm run build` and read the route table: `/` must be `ƒ (Dynamic)`.
+
+**Resources:**
+- Next.js docs: "Rendering" -> static vs dynamic, and `dynamic = "force-dynamic"`
+- Prisma docs: `updateMany` and `$transaction` (batch form)
+- Any write-up on "feedback loops in ML labeling" - the reason RULE rows do not vote

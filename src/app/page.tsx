@@ -6,9 +6,14 @@
 // fetching, no loading spinner.
 import { db } from "@/lib/db";
 import { formatUSD, percentOfCap } from "@/lib/money";
-import { addExpense, setBudget, getOrCreateDemoUser } from "./actions";
+import { addExpense, setBudget, setCategory, applyRules, getOrCreateDemoUser } from "./actions";
 import { currentMonth } from "@/lib/dates";
 import { Nav } from "@/components/nav";
+
+// This page reads the database on every request. Without this line
+// Next.js would prerender it once at build time and serve that
+// snapshot forever - a dashboard frozen at deploy time.
+export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const user = await getOrCreateDemoUser();
@@ -17,7 +22,7 @@ export default async function Dashboard() {
   const monthStart = new Date(year, mon - 1, 1);
   const monthEnd = new Date(year, mon, 1);
 
-  const [categories, budgets, expenses, totals] = await Promise.all([
+  const [categories, budgets, expenses, totals, uncategorized] = await Promise.all([
     db.category.findMany({
       where: { OR: [{ userId: null }, { userId: user.id }] },
       orderBy: { name: "asc" },
@@ -36,6 +41,7 @@ export default async function Dashboard() {
       where: { userId: user.id, date: { gte: monthStart, lt: monthEnd } },
       _sum: { amount: true },
     }),
+    db.expense.count({ where: { userId: user.id, categoryId: null } }),
   ]);
 
   const spentByCategory = new Map(
@@ -127,22 +133,48 @@ export default async function Dashboard() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-500">
-          Recent
-        </h2>
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
+            Recent
+          </h2>
+          {uncategorized > 0 && (
+            <form action={applyRules} className="text-xs text-zinc-500">
+              {uncategorized} uncategorized ·{" "}
+              <button className="underline">apply merchant rules</button>
+            </form>
+          )}
+        </div>
         {expenses.length === 0 ? (
           <p className="text-sm text-zinc-500">Nothing logged yet this month.</p>
         ) : (
           <ul className="divide-y divide-zinc-100 text-sm">
             {expenses.map((e) => (
-              <li key={e.id} className="flex justify-between py-2">
-                <span>
+              <li key={e.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0 flex-1 truncate">
                   {e.description}
                   <span className="ml-2 text-xs text-zinc-400">
-                    {e.category ? `${e.category.emoji} ${e.category.name}` : "uncategorized"}
+                    {e.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {e.categorySource !== "MANUAL" && e.categoryId && (
+                      <span className="ml-1 rounded bg-zinc-100 px-1 text-[10px] uppercase">{e.categorySource}</span>
+                    )}
                   </span>
                 </span>
-                <span className="tabular-nums">{formatUSD(e.amount)}</span>
+                {/* One tiny form per row: pick a category, save. A human
+                    label here is what teaches the merchant rules. */}
+                <form action={setCategory} className="flex items-center gap-1">
+                  <input type="hidden" name="expenseId" value={e.id} />
+                  <select
+                    name="categoryId" defaultValue={e.categoryId ?? ""}
+                    className={`rounded border px-1 py-0.5 text-xs ${e.categoryId ? "border-zinc-200" : "border-amber-300 bg-amber-50"}`}
+                  >
+                    <option value="">uncategorized</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>
+                    ))}
+                  </select>
+                  <button className="text-xs text-zinc-500 underline">save</button>
+                </form>
+                <span className="w-20 text-right tabular-nums">{formatUSD(e.amount)}</span>
               </li>
             ))}
           </ul>

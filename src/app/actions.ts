@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { currentMonth } from "@/lib/dates";
+import { categorizeByRules } from "@/lib/categorize/rules";
 
 // A demo user so the app is usable before auth exists. Auth replaces
 // this with the signed-in user's id; nothing else changes.
@@ -65,5 +66,29 @@ export async function setBudget(formData: FormData) {
     create: { userId: user.id, categoryId, month, capAmount: rawCap },
   });
 
+  revalidatePath("/");
+}
+
+// Change (or set) the category on an existing expense. Marked MANUAL:
+// this is a human label, the only kind merchant rules learn from.
+export async function setCategory(formData: FormData) {
+  const user = await getOrCreateDemoUser();
+  const expenseId = String(formData.get("expenseId") ?? "");
+  const categoryId = String(formData.get("categoryId") ?? "").trim();
+  if (!expenseId) throw new Error("Missing expense");
+
+  // updateMany with the userId in the filter, not update by id alone:
+  // a client can send any id, and ownership must be enforced server-side.
+  await db.expense.updateMany({
+    where: { id: expenseId, userId: user.id },
+    data: { categoryId: categoryId || null, categorySource: "MANUAL" },
+  });
+  revalidatePath("/");
+}
+
+// Apply merchant memory to everything still uncategorized.
+export async function applyRules() {
+  const user = await getOrCreateDemoUser();
+  await categorizeByRules(user.id);
   revalidatePath("/");
 }

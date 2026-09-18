@@ -46,6 +46,7 @@ export default async function ImportPage({
             Imported {added} expense{added === "1" ? "" : "s"}.
           </p>
           <ul className="mt-2 space-y-1 text-zinc-600">
+            <li>{one("ruled")} categorized from merchants you have labeled before</li>
             <li>{one("duplicates")} already imported (skipped)</li>
             <li>{one("credits")} deposits / payments (skipped)</li>
             <li>{one("unparsed")} rows could not be read</li>

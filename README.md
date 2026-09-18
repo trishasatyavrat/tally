@@ -19,14 +19,16 @@ narration, with a measured accuracy eval.
 ## Status
 
 Working locally: add expenses by hand or import a bank CSV (deduplicated
-on re-import), set monthly caps per category, and see spend-against-cap
-bars for the current month.
+on re-import), label them, and merchant memory categorizes repeat
+merchants on the next import. Set monthly caps per category and see
+spend-against-cap bars for the current month.
 
 - [x] Next.js scaffold, Prisma schema (User/Expense/Category/Budget/Group/Split)
 - [x] Local Postgres + first migration + seeded categories
 - [x] Expense entry, recent list, dashboard with category cap bars
 - [x] CSV import (quoted fields, several bank layouts, fingerprint dedupe)
-- [ ] AI categorization + merchant-memory fallback + accuracy eval
+- [x] Merchant memory: learns from hand labels, applies on import (no AI needed)
+- [ ] AI categorization for merchants never seen before + accuracy eval
 - [x] Settle-up algorithm (net balances -> fewest payments, property-tested)
 - [ ] Groups + splitting UI on top of it
 - [ ] Monthly plan suggestions + digest
