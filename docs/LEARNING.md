@@ -236,3 +236,77 @@ payments that cancel each other out.
 - Splitwise's blog on debt simplification - same approach, production
   scale
 - Vitest docs: `describe`/`it`/`expect` basics
+
+---
+
+## Day 5 (2026-09-18): CSV import - the first real data path
+
+**What we built:** `src/lib/csv.ts` (a from-scratch CSV parser plus
+bank-layout detection, amount/date parsing, and a transaction
+fingerprint), `src/lib/import.ts` (rows -> Expense records with
+deduplication), the `/import` page and its Server Action, a shared
+`Nav`, and a `fingerprint` column on Expense with a migration. 22 tests:
+20 pure, 2 against real Postgres (skipped when no DATABASE_URL).
+
+**The concepts:**
+
+- **Why write a CSV parser instead of installing one.** CSV looks
+  trivial and is not: quoted fields containing commas, doubled quotes
+  as escapes, CRLF line endings, a UTF-8 BOM that Excel prepends. The
+  parser is 40 lines and its test covers every one of those cases.
+  Knowing the format is what lets you debug the day a bank export
+  breaks the import - and it is a common interview warm-up.
+
+- **Money still never touches a float.** `parseAmountCents` turns
+  `"$1,234.56"` into the integer 123456 by string manipulation, and
+  `centsToDecimalString` turns it back into `"1234.56"` for Prisma's
+  Decimal column. The number 1234.56 never exists in JavaScript at any
+  point. Same rule as Day 1 and Day 4, applied at a new boundary.
+
+- **Idempotent import via a fingerprint.** Banks give no transaction id
+  in CSV, and two exports overlap by weeks. So each row gets
+  `sha256(date | cents | normalized description)`, stored in a UNIQUE
+  column, and the insert is `createMany({ skipDuplicates: true })` -
+  Postgres's `ON CONFLICT DO NOTHING`, one statement for N rows. Re-import
+  the same file: zero added, N duplicates. The integration test proves
+  exactly that. Design rule: make the operation safe to repeat, and
+  then nobody has to be careful.
+
+- **Nullable unique columns.** Manual expenses have no fingerprint, and
+  Postgres allows any number of NULLs in a unique index (NULL != NULL).
+  Day 2 called this a gotcha for the Category seed; here it is the
+  feature that lets one column serve both paths.
+
+- **Server Action file upload, no JavaScript.** `<form action={importCsv}>`
+  with `<input type="file">` posts multipart data; the action reads
+  `formData.get("file")` as a `File`, parses it, and `redirect()`s back
+  to `/import?added=...`. The page reads `searchParams` (a Promise in
+  this Next.js version - `await` it) and renders the summary. No client
+  component, no state, no fetch. The whole feature is two server files.
+
+- **The migration detour, worth recording.** `prisma migrate dev` refuses
+  to run non-interactively, so the migration was generated with
+  `migrate diff --from-config-datasource --to-schema ... --script` and
+  applied with `migrate deploy`. First attempt: a flag name was wrong,
+  the diff wrote an *empty* file, and `deploy` happily applied and
+  recorded a no-op migration. Fix: delete that one row from
+  `_prisma_migrations`, regenerate, redeploy. Lesson: after any
+  migration, `\d "Expense"` in psql and *look* - the tool reporting
+  success is not the column existing.
+
+- **Vitest needed the `@/` alias.** Tests that reach the database client
+  import `@/generated/prisma/client`; tsconfig knows that alias, Vitest
+  does not, so `vitest.config.ts` now declares it and loads `.env`.
+  Integration tests are marked `describe.skipIf(!hasDb)` - unit tests
+  must never need a database.
+
+**Do now:**
+1. `npm test`, then `npm run dev`, open /import, upload a CSV from your
+   bank. Upload it again - watch the duplicates count.
+2. Read `parseCsv` and trace `"say ""hi"""` through it by hand.
+3. `psql -d tally_dev -c 'select description, amount, fingerprint from "Expense" order by date desc limit 5'`.
+
+**Resources:**
+- RFC 4180 (the CSV "spec", two pages)
+- Postgres docs, INSERT ... ON CONFLICT - what `skipDuplicates` compiles to
+- Next.js docs: Server Actions -> "Forms" (file inputs are ordinary FormData)

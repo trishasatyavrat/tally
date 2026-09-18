@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { formatUSD, percentOfCap } from "@/lib/money";
 import { addExpense, setBudget, getOrCreateDemoUser } from "./actions";
 import { currentMonth } from "@/lib/dates";
+import { Nav } from "@/components/nav";
 
 export default async function Dashboard() {
   const user = await getOrCreateDemoUser();
@@ -47,8 +48,9 @@ export default async function Dashboard() {
 
   return (
     <main className="mx-auto max-w-3xl p-6 font-sans">
+      <Nav current="/" />
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold">tally</h1>
+        <h1 className="text-2xl font-semibold">This month</h1>
         <p className="text-sm text-zinc-500">
           {month} — {formatUSD(monthTotal)} spent this month
         </p>

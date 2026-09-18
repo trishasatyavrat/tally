@@ -46,6 +46,11 @@ model Expense {
   date        DateTime @default(now())
   merchant    String? // raw text like "CHIPOTLE 0231", kept for the AI categorizer
 
+  // Set on CSV-imported rows: hash of date + amount + description. Unique,
+  // so re-importing an overlapping export cannot duplicate a transaction.
+  // Manual entries leave it null (Postgres allows many nulls in a unique index).
+  fingerprint String? @unique
+
   userId     String
   user       User      @relation(fields: [userId], references: [id])
   categoryId String?

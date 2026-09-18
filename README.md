@@ -18,13 +18,14 @@ narration, with a measured accuracy eval.
 
 ## Status
 
-Working locally: you can add expenses, set monthly caps per category,
-and see spend-against-cap bars for the current month.
+Working locally: add expenses by hand or import a bank CSV (deduplicated
+on re-import), set monthly caps per category, and see spend-against-cap
+bars for the current month.
 
 - [x] Next.js scaffold, Prisma schema (User/Expense/Category/Budget/Group/Split)
 - [x] Local Postgres + first migration + seeded categories
 - [x] Expense entry, recent list, dashboard with category cap bars
-- [ ] CSV import
+- [x] CSV import (quoted fields, several bank layouts, fingerprint dedupe)
 - [ ] AI categorization + merchant-memory fallback + accuracy eval
 - [x] Settle-up algorithm (net balances -> fewest payments, property-tested)
 - [ ] Groups + splitting UI on top of it
@@ -40,7 +41,8 @@ echo 'DATABASE_URL="postgresql://localhost:5432/tally_dev"' > .env
 npx prisma migrate dev              # create the tables
 psql -d tally_dev -f prisma/seed.sql  # seed the default categories
 npm run dev                         # http://localhost:3000
-npm test                            # unit + property tests
+npm test                            # unit + property + DB integration tests
+npm run typecheck && npm run lint   # what CI will run
 ```
 
 `docs/LEARNING.md` is the running lab notebook — what each piece does,
