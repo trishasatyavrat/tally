@@ -3,6 +3,7 @@ import Link from "next/link";
 const LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/import", label: "Import" },
+  { href: "/groups", label: "Groups" },
 ];
 
 export function Nav({ current }: { current: string }) {

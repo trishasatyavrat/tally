@@ -379,3 +379,61 @@ build time.
 - Next.js docs: "Rendering" -> static vs dynamic, and `dynamic = "force-dynamic"`
 - Prisma docs: `updateMany` and `$transaction` (batch form)
 - Any write-up on "feedback loops in ML labeling" - the reason RULE rows do not vote
+
+---
+
+## Day 7 (2026-09-28): Groups and splitting - the Splitwise half goes live
+
+**What we built:** `/groups` (create a group by name + member emails)
+and `/groups/[id]` (members, shared expenses with an equal split,
+per-person balances, the settle-up payment list from Day 4's
+algorithm, "mark everything settled"). `src/lib/split.ts` does the
+money math: `equalSplitCents`, `decimalStringToCents`, and the adapter
+from Split rows to the settle-up input. 45 tests.
+
+**The concepts:**
+
+- **$10 / 3 is 334 + 333 + 333.** `equalSplitCents` hands the remainder
+  cents to the first people in the list, deterministically, and the
+  test sweeps hundreds of (total, n) pairs asserting the shares sum to
+  the total. Floats would give 333.33 x 3 = 999.99 and a missing cent
+  that nobody owes.
+
+- **The payer's share is not a debt.** A $30 dinner paid by A, split
+  three ways, creates Split rows for B and C only - A does not owe A.
+  The expense and its splits are created in one nested `create`, so
+  there is never an expense whose debts half-exist.
+
+- **Balances are computed, never stored.** The group page pulls the
+  open Split rows, nets them (`netBalances`), and runs `settleUp` on
+  every request. Day 1 said "store facts, compute conclusions" and
+  Day 4 built the algorithm; today is the first page that shows it.
+  "3 payments instead of 7 debts" on the page is the algorithm's
+  selling point, stated in the UI.
+
+- **Trust nothing from the form.** `addSharedExpense` re-checks that
+  the payer and every participant are group members, `requireMembership`
+  guards every action, and the group page query itself filters on
+  `members: { some: { userId: me } }` so a guessed id 404s. Same
+  principle as Day 6's `setCategory`: ownership lives in the WHERE.
+
+- **Dynamic route params are a Promise.** `params: Promise<{ id: string }>`
+  in this Next.js version - `await` it. The bundled docs in
+  `node_modules/next/dist/docs` say so; the training-data shape (a plain
+  object) is a build error.
+
+- **Known modeling gap, on purpose.** A shared expense sits on the
+  payer's dashboard at its full amount, not their share. The right fix
+  is "spend net of what others owe you", which touches the dashboard
+  aggregation; recorded here so it is a decision, not an oversight.
+
+**Do now:**
+1. `npm run dev`, create a group with two emails, add a $10 expense
+   split three ways, and check the balances say 3.34 / 3.33.
+2. Add a second expense paid by someone else and watch the transfer
+   list shrink.
+3. Work the netBalances numbers on paper for what you entered.
+
+**Resources:**
+- Splitwise blog, "Debt simplification" - the product this page copies
+- Next.js docs: dynamic routes, `params` as a Promise
