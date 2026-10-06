@@ -527,3 +527,13 @@ build onto Next's standalone output (`output: "standalone"` in
   (`migrate deploy`)
 - Next.js docs, `output: 'standalone'`
 - Docker docs, "Multi-stage builds"
+
+**Addendum, same day - the first CI failure.** The very first run went
+red at `npm run typecheck`: `Cannot find name 'LayoutProps'` in
+`layout.tsx`. Locally it had always passed. `LayoutProps` is a global
+type Next.js 16 *generates* into `.next/types` during `next dev` or
+`next build` - present on the laptop from months of dev runs, absent on
+a clean checkout. The clean-checkout argument above proved itself
+within ten minutes. Fix in `package.json`, not in the workflow:
+`"typecheck": "next typegen && tsc --noEmit"`, so the route types are
+generated wherever typecheck runs. (The Docker job passed first time.)
