@@ -1,0 +1,75 @@
+# Every push and pull request runs exactly what the README tells a
+# developer to run locally - typecheck, lint, tests, build - against a
+# real Postgres, so "works on my machine" is never the last word.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # A throwaway Postgres next to the job. The integration tests skip
+    # themselves without DATABASE_URL; here they get a real database,
+    # migrated from the same files a deploy would use.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tally
+          POSTGRES_PASSWORD: tally
+          POSTGRES_DB: tally_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tally"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://tally:tally@localhost:5432/tally_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # npm ci, not npm install: installs exactly package-lock.json and
+      # fails if the lockfile and package.json disagree.
+      - run: npm ci
+
+      # The typed client is generated, not committed (src/generated is
+      # gitignored), so every fresh checkout regenerates it.
+      - run: npx prisma generate
+
+      # migrate deploy applies the committed migrations and nothing
+      # else - no schema diffing, no prompts. It is the production
+      # command; migrate dev is the laptop command.
+      - run: npx prisma migrate deploy
+      - run: psql "$DATABASE_URL" -f prisma/seed.sql
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  # Builds the production image so the Dockerfile is tested on every
+  # push, even from a laptop without Docker. Nothing is pushed anywhere.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: tally:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

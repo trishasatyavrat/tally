@@ -34,20 +34,26 @@ fewest transfers.
 - [x] Settle-up algorithm (net balances -> fewest payments, property-tested)
 - [x] Groups + splitting UI: equal splits in exact cents, live balances, settle-up list
 - [ ] Monthly plan suggestions + digest
-- [ ] Auth, deploy, CI
+- [x] CI: GitHub Actions runs typecheck, lint, tests against Postgres, the production build, and a Docker image build on every push
+- [ ] Auth, deploy
 
 ## Develop
 
 ```bash
 npm install
 createdb tally_dev                  # local Postgres
-echo 'DATABASE_URL="postgresql://localhost:5432/tally_dev"' > .env
+cp .env.example .env               # DATABASE_URL for local Postgres
 npx prisma migrate dev              # create the tables
 psql -d tally_dev -f prisma/seed.sql  # seed the default categories
 npm run dev                         # http://localhost:3000
 npm test                            # unit + property + DB integration tests
-npm run typecheck && npm run lint   # what CI will run
+npm run typecheck && npm run lint   # CI runs these plus the tests and build
+docker build -t tally .             # production image (standalone Next output)
 ```
+
+CI is `.github/workflows/ci.yml`: a throwaway Postgres, the committed
+migrations applied with `prisma migrate deploy`, then the same four
+commands, plus a second job that builds the Docker image.
 
 `docs/LEARNING.md` is the running lab notebook — what each piece does,
 why it is built that way, and the bugs hit along the way.

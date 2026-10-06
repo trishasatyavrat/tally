@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.github
+.env*
+coverage
+docs
+*.md
+.agents
+.claude
+.windsurf

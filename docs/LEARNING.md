@@ -437,3 +437,93 @@ from Split rows to the settle-up input. 45 tests.
 **Resources:**
 - Splitwise blog, "Debt simplification" - the product this page copies
 - Next.js docs: dynamic routes, `params` as a Promise
+
+---
+
+## Day 8 (2026-10-05): CI and a Dockerfile - the checks stop living on one laptop
+
+**What we built:** `.github/workflows/ci.yml` runs on every push and
+pull request: a throwaway Postgres, `npm ci`, `prisma generate`,
+`prisma migrate deploy`, the seed, then typecheck, lint, tests, and the
+production build - the same commands the README has always listed. A
+second job builds the Docker image. `Dockerfile` is a three-stage
+build onto Next's standalone output (`output: "standalone"` in
+`next.config.ts`), plus `.dockerignore` and `.env.example`.
+
+**The concepts:**
+
+- **CI is the README, executed by a machine.** Day 1 wrote "what CI
+  will run" next to four commands. CI is nothing more than a computer
+  that runs them on every push from a clean checkout and refuses to go
+  green otherwise. The value is the clean checkout: it catches the
+  file you forgot to commit, the dependency only on your machine, the
+  generated client you assumed was there.
+
+- **Service containers.** The integration test (`import.db.test.ts`)
+  skips itself without `DATABASE_URL`, by design - unit tests must
+  never need a database. In CI it should *not* skip, so the job starts
+  a `postgres:16` container beside it, waits for `pg_isready`, and
+  points `DATABASE_URL` at it. Same test, real database, every push.
+
+- **`migrate deploy` vs `migrate dev`.** `dev` is the laptop command:
+  it diffs the schema, writes a new migration, prompts. `deploy`
+  applies the committed migration files in order and does nothing
+  else - no diffing, no prompts, no surprises. CI and production use
+  `deploy`; if the committed migrations cannot rebuild the schema from
+  scratch, CI is where you find out.
+
+- **`npm ci`, not `npm install`.** `ci` installs exactly what the
+  lockfile says and fails if `package.json` and the lockfile disagree.
+  `install` would quietly "fix" the lockfile. Reproducibility is the
+  whole point of the job.
+
+- **Generated code is not committed.** `src/generated/prisma` is
+  gitignored, so every fresh environment - CI, Docker, a new laptop -
+  must run `prisma generate` before TypeScript can see the client.
+  Forgetting this is the most common first CI failure in Prisma
+  projects.
+
+- **Multi-stage Docker builds.** Stage one installs dependencies, stage
+  two generates the client and compiles, stage three copies only what
+  runs: `.next/standalone` (Next traces every file the server imports
+  and writes a self-contained `server.js`), `.next/static`, and
+  `public`. No source, no dev dependencies, no `node_modules` tree, a
+  non-root user. The image is small because the build stages are
+  thrown away.
+
+- **Build-time vs run-time environment.** `prisma generate` reads
+  `prisma.config.ts`, which reads `DATABASE_URL`, so the build stage
+  sets a placeholder. That is only safe because no page queries the
+  database at build time - every database route is `force-dynamic`
+  (the build output shows ƒ for `/`, `/groups`, `/groups/[id]`,
+  `/import`, and ○ only for `/_not-found`). Had a page been static,
+  `next build` would have tried to prerender it against a database
+  that does not exist. The real URL arrives when the container starts.
+
+- **The image has no Prisma CLI.** Standalone output carries the
+  server, not the toolchain, so migrations run separately
+  (`prisma migrate deploy` from CI or a one-off job) before the
+  container starts. Keeping schema changes out of the app's startup
+  path is the right split anyway: a deploy should not be the first
+  time a migration runs.
+
+- **Honest note.** This laptop has no Docker, so the Dockerfile was
+  never built here. That is exactly why the second CI job exists: the
+  image is built on GitHub's runner on every push, so the file is
+  tested even though it cannot be tested locally.
+
+**Do now:**
+1. Open the Actions tab on GitHub after this push and read both jobs'
+   logs top to bottom once. Know what each step prints.
+2. Delete `prisma generate` from the workflow in your head: which step
+   fails, and with what error?
+3. When Docker is installed: `docker build -t tally .`, then run it
+   with `-e DATABASE_URL=...` against the local database after
+   `npx prisma migrate deploy`.
+
+**Resources:**
+- GitHub Docs, "About service containers"
+- Prisma docs, "Deploying database changes with Prisma Migrate"
+  (`migrate deploy`)
+- Next.js docs, `output: 'standalone'`
+- Docker docs, "Multi-stage builds"
