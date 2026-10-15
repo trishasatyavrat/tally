@@ -537,3 +537,38 @@ a clean checkout. The clean-checkout argument above proved itself
 within ten minutes. Fix in `package.json`, not in the workflow:
 `"typecheck": "next typegen && tsc --noEmit"`, so the route types are
 generated wherever typecheck runs. (The Docker job passed first time.)
+
+---
+
+## Day 9 (2026-10-14): Pace - a cap bar that knows what day it is
+
+**What we built:** `src/lib/pace.ts` - `computePace(spent, cap, day,
+daysInMonth)` returns the month-end projection, money left, a daily
+allowance, and a status (`on-track`, `watch`, `over-pace`, `over-cap`,
+`no-cap`). Pure, integer cents, 8 tests.
+
+**The concepts:**
+
+- **60% means nothing without the date.** 60% of the delivery cap on the
+  25th is fine; on the 8th it is a problem. Linear projection
+  (spent x days in month / days elapsed) turns "how much so far" into
+  "where this ends up", which is the number you can still act on.
+
+- **Don't forecast from two data points.** One $40 dinner on the 2nd
+  projects to $600 for the month. So `over-pace` and `watch` are
+  suppressed before day 5. `over-cap` is never suppressed, because it is
+  a fact, not a forecast. Separating facts from estimates in the output
+  is the same idea as Day 6's MANUAL vs RULE labels.
+
+- **The clock is a parameter.** `computePace` never calls `Date.now()`;
+  the caller passes the day. That makes every test exact ("Oct 10, $60
+  of $150 projects $186") and means the same function can answer "what
+  did my pace look like on the 15th?" later.
+
+- **Daily allowance counts today.** On the 10th of a 31-day month there
+  are 22 days left including today. Off-by-one here would tell someone
+  they have slightly more per day than they do - the bad direction.
+
+**Do now:**
+1. `npm test`. Read the "Oct 10" test and check the $4.09 by hand.
+2. Change the day-5 threshold to day 1 and see which test fails.
