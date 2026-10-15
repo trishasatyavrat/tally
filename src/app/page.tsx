@@ -9,6 +9,18 @@ import { formatUSD, percentOfCap } from "@/lib/money";
 import { addExpense, setBudget, setCategory, applyRules, getOrCreateDemoUser } from "./actions";
 import { currentMonth } from "@/lib/dates";
 import { Nav } from "@/components/nav";
+import { computePace, daysInMonth, type PaceStatus } from "@/lib/pace";
+import { decimalStringToCents } from "@/lib/split";
+
+// One line under each cap bar. Forecasts are worded as forecasts
+// ("on pace for"), facts as facts ("over by").
+const PACE_STYLE: Record<PaceStatus, string> = {
+  "no-cap": "text-zinc-400",
+  "on-track": "text-zinc-500",
+  watch: "text-amber-600",
+  "over-pace": "text-orange-600",
+  "over-cap": "text-red-600",
+};
 
 // This page reads the database on every request. Without this line
 // Next.js would prerender it once at build time and serve that
@@ -51,6 +63,19 @@ export default async function Dashboard() {
     budgets.map((b) => [b.categoryId, Number(b.capAmount)])
   );
   const monthTotal = [...spentByCategory.values()].reduce((a, b) => a + b, 0);
+
+  // Pace runs on exact cents from the database's Decimal strings, not on
+  // the display numbers above. Only meaningful for the current month,
+  // which is the only month this page shows.
+  const today = new Date().getDate();
+  const totalDays = daysInMonth(year, mon);
+  const centsByCategory = new Map(
+    totals.map((t) => [t.categoryId, decimalStringToCents((t._sum.amount ?? 0).toString())])
+  );
+  const capCentsByCategory = new Map(
+    budgets.map((b) => [b.categoryId, decimalStringToCents(b.capAmount.toString())])
+  );
+  const usd = (cents: number) => formatUSD(cents / 100);
 
   return (
     <main className="mx-auto max-w-3xl p-6 font-sans">
@@ -102,6 +127,13 @@ export default async function Dashboard() {
             const cap = capByCategory.get(c.id) ?? null;
             const pct = percentOfCap(spent, cap);
             const over = cap !== null && spent > cap;
+            const pace = computePace(centsByCategory.get(c.id) ?? 0,
+                                     capCentsByCategory.get(c.id) ?? null, today, totalDays);
+            const paceLine =
+              pace.status === "no-cap" ? (pace.spentCents > 0 ? `on pace for ${usd(pace.projectedCents)} this month` : null)
+              : pace.status === "over-cap" ? `over by ${usd(-pace.remainingCents!)}`
+              : pace.status === "over-pace" ? `on pace for ${usd(pace.projectedCents)} · ${usd(pace.dailyAllowanceCents!)}/day keeps you under`
+              : `${usd(pace.remainingCents!)} left · ${usd(pace.dailyAllowanceCents!)}/day`;
             return (
               <li key={c.id} className="rounded border border-zinc-200 p-3">
                 <div className="flex items-baseline justify-between text-sm">
@@ -117,6 +149,9 @@ export default async function Dashboard() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
+                )}
+                {paceLine && (
+                  <p className={`mt-1 text-xs ${PACE_STYLE[pace.status]}`}>{paceLine}</p>
                 )}
                 <form action={setBudget} className="mt-2 flex gap-2">
                   <input type="hidden" name="categoryId" value={c.id} />

@@ -572,3 +572,34 @@ allowance, and a status (`on-track`, `watch`, `over-pace`, `over-cap`,
 **Do now:**
 1. `npm test`. Read the "Oct 10" test and check the $4.09 by hand.
 2. Change the day-5 threshold to day 1 and see which test fails.
+
+---
+
+## Day 10 (2026-10-14): Pace on the dashboard
+
+**What we built:** every category card now has one line under its cap
+bar: "$90.00 left · $5.00/day", "on pace for $186.00 · $4.09/day keeps
+you under", "over by $10.00", or for uncapped categories "on pace for
+$26.57 this month". Colors follow the status from Day 9.
+
+**The concepts:**
+
+- **Facts and forecasts are worded differently.** "Over by" is a fact.
+  "On pace for" is a forecast. A user should be able to tell which kind
+  of statement they are reading without knowing how it was computed.
+
+- **The page reads cents from Decimal strings, not display numbers.** The
+  dashboard already had `Number(...)` values for the bars. Pace uses
+  `decimalStringToCents(sum.toString())` instead, so the arithmetic is
+  exact and the display numbers stay display-only. Same rule as every
+  money path in this app.
+
+- **Verified against a real render.** The build, typecheck, and tests
+  passed, but the first fetch of the page showed no pace lines - because
+  the local database had no October spending. Two temporary expenses
+  and a cap, a fetch of the rendered HTML, a hand check ($90 over 18 days
+  = $5.00/day; $12 x 31 / 14 = $26.57), then the test rows deleted.
+  Green tests are not the same as a feature that renders.
+
+**Do now:** `npm run dev`, set a cap, add a couple of expenses, and read
+the line under the bar. Then check the numbers by hand.
