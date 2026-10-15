@@ -23,7 +23,8 @@ on re-import), label them, and merchant memory categorizes repeat
 merchants on the next import. Set monthly caps per category and see
 spend-against-cap bars for the current month. Create groups, add shared
 expenses split equally in exact cents, and see who pays whom with the
-fewest transfers.
+fewest transfers. Each category shows its month-end pace and a daily
+allowance, and /plan suggests caps from your own last three months.
 
 - [x] Next.js scaffold, Prisma schema (User/Expense/Category/Budget/Group/Split)
 - [x] Local Postgres + first migration + seeded categories
@@ -33,7 +34,9 @@ fewest transfers.
 - [ ] AI categorization for merchants never seen before + accuracy eval
 - [x] Settle-up algorithm (net balances -> fewest payments, property-tested)
 - [x] Groups + splitting UI: equal splits in exact cents, live balances, settle-up list
-- [ ] Monthly plan suggestions + digest
+- [x] Spending pace on the dashboard (projection, daily allowance, warnings)
+- [x] Monthly plan: suggested caps from your median month, trends, one-click apply
+- [ ] AI-worded monthly digest on top of the plan numbers
 - [x] CI: GitHub Actions runs typecheck, lint, tests against Postgres, the production build, and a Docker image build on every push
 - [ ] Auth, deploy
 

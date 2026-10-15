@@ -639,3 +639,41 @@ Pure, 6 tests.
 
 **Do now:** `npm test`, then work the delivery example by hand: median
 of $112.40, $131.10, $98.00, rounded up to $5.
+
+---
+
+## Day 12 (2026-10-14): The plan page
+
+**What we built:** `/plan` - one row per category with the last three
+months of spend, a trend, this month's spend and its projection, the
+current cap, and the suggested cap with a one-click "use $115.00" button
+(it posts to the existing `setBudget` action). `Plan` added to the nav.
+
+**The concepts:**
+
+- **One raw SQL query, on purpose.** Prisma's `groupBy` can group by
+  columns, not by a computed month. `to_char(date, 'YYYY-MM')` in a
+  `$queryRaw` tagged template does it in one round-trip. The tagged
+  template sends `user.id` and the dates as bound parameters, never
+  string-concatenated SQL, so there is no injection path. `SUM(...)::text`
+  brings the total back as an exact decimal string, then into cents.
+
+- **The page computes nothing.** Every number on it comes from
+  `plan.ts` or `pace.ts`, which are tested. The page queries and renders.
+  When a number looks wrong, there is one place to look.
+
+- **Reuse the action that already validates.** The apply button is a
+  form with hidden `categoryId` and `capAmount` fields posting to
+  `setBudget`, which already validates the amount and enforces the user.
+  No new endpoint, no new validation to get wrong.
+
+- **Verified on a rendered page.** Delivery history of $112.40, $131.10,
+  $98.00 rendered as "use $115.00" (median rounded up), "falling" ($98
+  is under 85% of the earlier median $121.75), and October's $40 by the
+  14th projected to $88.57. First attempt returned 404: a server from an
+  earlier check still held the port and was serving the old build.
+  Lesson: when a fresh build looks missing, check what is actually
+  answering on the port.
+
+**Do now:** `npm run dev`, open /plan, and compare one row's suggestion
+to your own hand calculation.
