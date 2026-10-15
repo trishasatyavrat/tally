@@ -603,3 +603,39 @@ $26.57 this month". Colors follow the status from Day 9.
 
 **Do now:** `npm run dev`, set a cap, add a couple of expenses, and read
 the line under the bar. Then check the numbers by hand.
+
+---
+
+## Day 11 (2026-10-14): Suggesting caps from your own history
+
+**What we built:** `src/lib/plan.ts` - `previousMonths`, `median`, and
+`suggestCap(history)`: a suggested monthly cap per category from the last
+few months of real spending, plus a trend (rising / falling / flat / new).
+Pure, 6 tests.
+
+**The concepts:**
+
+- **Median, not mean.** Fun spending of $40, $310 (one concert), $45 has
+  a mean of $131.67 and a median of $45. A cap built on the mean would
+  let one unusual month raise your budget for the year. The median is
+  the typical month, which is what a cap should describe.
+
+- **Round up, not to the nearest.** The suggestion comes from your own
+  typical month, so it should be a cap you can meet. Rounding $112.40
+  down to $110 would set you up to fail by default.
+
+- **No suggestion is a valid answer.** With fewer than two months of
+  spend there is no "typical", so `suggestCap` returns null and says
+  why. Inventing a number from one month would look helpful and be wrong.
+
+- **A dead band for trends.** Month-to-month spending is noisy. "Rising"
+  needs last month above 115% of the earlier median; anything within
+  15% is flat. Without the band, every month would be a trend.
+
+- **Where AI fits later.** This is the "math is always code" rule from
+  the README in practice. If tally later uses Claude to word the plan,
+  the model receives these numbers and writes sentences about them. It
+  never computes them.
+
+**Do now:** `npm test`, then work the delivery example by hand: median
+of $112.40, $131.10, $98.00, rounded up to $5.
