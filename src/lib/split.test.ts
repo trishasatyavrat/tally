@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { equalSplitCents, decimalStringToCents, transfersFromSplitRows, paymentsAsSplits } from "./split";
+import { equalSplitCents, decimalStringToCents, transfersFromSplitRows, paymentsAsSplits, myShareCents } from "./split";
 import { netBalances } from "./settle";
 
 describe("equalSplitCents", () => {
@@ -76,5 +76,23 @@ describe("payments", () => {
       .toEqual([{ paidByUserId: "X", owedByUserId: "Y", amountCents: 200 }]);
     expect(netBalances(paymentsAsSplits([{ amount: "2.00", fromUserId: "X", toUserId: "Y" }])))
       .toEqual([{ userId: "X", amountCents: 200 }, { userId: "Y", amountCents: -200 }]);
+  });
+});
+
+describe("myShareCents", () => {
+  // $10.00 split three ways, paid by A: B and C owe 333 each, A's share is 334.
+  const e = { userId: "A", amount: "10.00", splits: [
+    { owedById: "B", amount: "3.33" }, { owedById: "C", amount: "3.33" }] };
+  it("payer's share is the total minus what others owe", () => {
+    expect(myShareCents(e, "A")).toBe(334);
+  });
+  it("a participant's share is their split", () => {
+    expect(myShareCents(e, "B")).toBe(333);
+  });
+  it("shares always add up to the total", () => {
+    expect(["A", "B", "C"].reduce((s, u) => s + myShareCents(e, u), 0)).toBe(1000);
+  });
+  it("someone outside the split has no share", () => {
+    expect(myShareCents(e, "D")).toBe(0);
   });
 });

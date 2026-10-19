@@ -738,3 +738,44 @@ and "aditi paid Demo $10.00" in the history. Test rows deleted after.
 
 **Do now:** create a group, add an expense, click "paid" on one transfer,
 and watch both the balance and the list update.
+
+---
+
+## Day 15 (2026-10-19): Counting only your share
+
+**What we built:** `myShareCents` in `split.ts` (tested) and
+`spendByCategoryMonth` in the new `src/lib/spend.ts`. The dashboard and
+/plan both read from it. This closes the gap Day 7 recorded on purpose:
+a shared expense used to count at its full amount for the payer and not
+at all for anyone else.
+
+**Verified on a rendered page:** $20 personal Food, a $30 dinner you paid
+split three ways, and a $12 lunch a friend paid with $4 on you. Old
+behavior: $50 of Food (the dinner in full, the lunch missing). New:
+**$34.00** on the dashboard and on /plan ($20 + $10 + $4), projected to
+$55.47 by month end. Test rows deleted after.
+
+**The concepts:**
+
+- **Spending is what is yours, not what touched your card.** Paying $30
+  for three people is $10 of your spending and $20 lent out. A friend
+  paying for your $4 share is $4 of your spending you have not paid yet.
+  The settle-up page tracks the lending; the budget should track the
+  spending.
+
+- **Your share, defined once.** If you paid: total minus what others owe
+  (Split rows never include the payer). If someone else paid: your split,
+  or zero. The test checks the three shares of a $10 split (334, 333,
+  333) add back to exactly $10.
+
+- **One source for two pages.** The dashboard and /plan each had their
+  own query. Fixing one and not the other would have shown two different
+  Food totals for the same month. Both now call the same function, so
+  they cannot disagree.
+
+- **Mixed aggregation, on purpose.** Personal spending is still summed in
+  Postgres. Group shares need each expense's splits, so those come back
+  as rows and are reduced in cents in TypeScript. Each part is done where
+  it is cheapest and exact.
+
+**Do now:** set up the same three expenses yourself and check $34 by hand.

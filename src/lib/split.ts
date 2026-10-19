@@ -56,3 +56,17 @@ export function netInputs(rows: SplitRow[], payments: PaymentRow[] = []): NetInp
 export function transfersFromSplitRows(rows: SplitRow[], payments: PaymentRow[] = []): Transfer[] {
   return settleFromSplits(netInputs(rows, payments));
 }
+
+/**
+ * Your share of one group expense, in cents. If you paid, it is the total
+ * minus what the others owe you (Split rows never include the payer). If
+ * someone else paid, it is the split you owe, or 0 if you were not in it.
+ */
+export function myShareCents(
+  e: { userId: string; amount: string; splits: { owedById: string; amount: string }[] },
+  me: string,
+): number {
+  if (e.userId === me)
+    return decimalStringToCents(e.amount) - e.splits.reduce((s, x) => s + decimalStringToCents(x.amount), 0);
+  return e.splits.filter((x) => x.owedById === me).reduce((s, x) => s + decimalStringToCents(x.amount), 0);
+}

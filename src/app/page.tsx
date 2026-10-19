@@ -11,6 +11,7 @@ import { currentMonth } from "@/lib/dates";
 import { Nav } from "@/components/nav";
 import { computePace, daysInMonth, type PaceStatus } from "@/lib/pace";
 import { decimalStringToCents } from "@/lib/split";
+import { spendByCategoryMonth, spendKey } from "@/lib/spend";
 
 // One line under each cap bar. Forecasts are worded as forecasts
 // ("on pace for"), facts as facts ("over by").
@@ -34,7 +35,7 @@ export default async function Dashboard() {
   const monthStart = new Date(year, mon - 1, 1);
   const monthEnd = new Date(year, mon, 1);
 
-  const [categories, budgets, expenses, totals, uncategorized] = await Promise.all([
+  const [categories, budgets, expenses, spend, uncategorized] = await Promise.all([
     db.category.findMany({
       where: { OR: [{ userId: null }, { userId: user.id }] },
       orderBy: { name: "asc" },
@@ -46,18 +47,15 @@ export default async function Dashboard() {
       orderBy: { date: "desc" },
       take: 20,
     }),
-    // Aggregate in the database rather than summing in JS: it is one
-    // round-trip instead of N, and Postgres sums Decimals exactly.
-    db.expense.groupBy({
-      by: ["categoryId"],
-      where: { userId: user.id, date: { gte: monthStart, lt: monthEnd } },
-      _sum: { amount: true },
-    }),
+    // Your spending this month: personal expenses in full, group
+    // expenses at your share only (src/lib/spend.ts).
+    spendByCategoryMonth(user.id, monthStart, monthEnd),
     db.expense.count({ where: { userId: user.id, categoryId: null } }),
   ]);
 
+  const centsFor = (categoryId: string | null) => spend.get(spendKey(categoryId, month)) ?? 0;
   const spentByCategory = new Map(
-    totals.map((t) => [t.categoryId, Number(t._sum.amount ?? 0)])
+    [null, ...categories.map((c) => c.id)].map((id) => [id, centsFor(id) / 100])
   );
   const capByCategory = new Map(
     budgets.map((b) => [b.categoryId, Number(b.capAmount)])
@@ -70,7 +68,7 @@ export default async function Dashboard() {
   const today = new Date().getDate();
   const totalDays = daysInMonth(year, mon);
   const centsByCategory = new Map(
-    totals.map((t) => [t.categoryId, decimalStringToCents((t._sum.amount ?? 0).toString())])
+    [null, ...categories.map((c) => c.id)].map((id) => [id, centsFor(id)])
   );
   const capCentsByCategory = new Map(
     budgets.map((b) => [b.categoryId, decimalStringToCents(b.capAmount.toString())])
