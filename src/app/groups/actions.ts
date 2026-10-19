@@ -94,3 +94,26 @@ export async function settleGroup(formData: FormData) {
   await db.split.updateMany({ where: { expense: { groupId }, settled: false }, data: { settled: true } });
   revalidatePath(`/groups/${groupId}`);
 }
+
+// Record one real transfer between two members. Validated like every
+// other action: both people must be in the group, the amount must be
+// positive cents, and someone cannot pay themselves.
+export async function recordPayment(formData: FormData) {
+  const me = await getOrCreateDemoUser();
+  const groupId = String(formData.get("groupId") ?? "");
+  await requireMembership(groupId, me.id);
+  const fromUserId = String(formData.get("fromUserId") ?? "");
+  const toUserId = String(formData.get("toUserId") ?? "");
+  const cents = parseAmountCents(String(formData.get("amount") ?? ""));
+  if (cents === null || cents <= 0) throw new Error("Amount must be positive");
+  if (fromUserId === toUserId) throw new Error("Pick two different people");
+
+  const members = await db.groupMember.findMany({ where: { groupId }, select: { userId: true } });
+  const ids = new Set(members.map((m) => m.userId));
+  if (!ids.has(fromUserId) || !ids.has(toUserId)) throw new Error("Both people must be group members");
+
+  await db.payment.create({
+    data: { groupId, fromUserId, toUserId, amount: centsToDecimalString(cents) },
+  });
+  revalidatePath(`/groups/${groupId}`);
+}

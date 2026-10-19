@@ -708,3 +708,33 @@ overpayment, and the direction of the mapping.
   Day 1's rule, holding for the fourth time.
 
 **Do now:** `npm test`, then work the overpayment test by hand.
+
+---
+
+## Day 14 (2026-10-19): Recording payments on the group page
+
+**What we built:** every suggested transfer in "Settle up" has a "paid"
+button that records exactly that payment; a "Record a payment" form takes
+any amount between any two members; a payment history lists what was
+paid and when. Balances and the transfer list now come from
+`netInputs(splits, payments)`.
+
+**Verified on a rendered page:** a temporary group where Demo paid $30
+for three and Aditi paid Demo back $10. The page showed "Demo is owed
+$10.00, rohan owes $10.00", the single transfer "rohan pays Demo $10.00",
+and "aditi paid Demo $10.00" in the history. Test rows deleted after.
+
+**The concepts:**
+
+- **The button posts the transfer the algorithm suggested.** Hidden
+  fields carry from, to, and the exact amount in cents converted back to
+  a decimal string. The server action re-validates all of it anyway: the
+  form is a convenience, not a source of trust.
+
+- **Membership is checked for both people.** A payment between a member
+  and someone outside the group would corrupt every balance in it.
+  `recordPayment` checks both ids against the group's members, and
+  rejects paying yourself.
+
+**Do now:** create a group, add an expense, click "paid" on one transfer,
+and watch both the balance and the list update.

@@ -5,12 +5,12 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { formatUSD } from "@/lib/money";
-import { transfersFromSplitRows } from "@/lib/split";
+import { transfersFromSplitRows, netInputs } from "@/lib/split";
 import { netBalances } from "@/lib/settle";
-import { decimalStringToCents } from "@/lib/split";
+import { centsToDecimalString } from "@/lib/csv";
 import { Nav } from "@/components/nav";
 import { getOrCreateDemoUser } from "@/app/actions";
-import { addMember, addSharedExpense, settleGroup } from "../actions";
+import { addMember, addSharedExpense, settleGroup, recordPayment } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,7 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
         include: { user: true, splits: { include: { owedBy: true } } },
         orderBy: { date: "desc" },
       },
+      payments: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!group) notFound();
@@ -34,10 +35,13 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
     e.splits.map((s) => ({ amount: s.amount.toString(), owedById: s.owedById, settled: s.settled, expense: { userId: e.userId } }))
   );
   const open = splitRows.filter((r) => !r.settled);
-  const balances = netBalances(open.map((r) => ({
-    paidByUserId: r.expense.userId, owedByUserId: r.owedById, amountCents: decimalStringToCents(r.amount),
-  })));
-  const transfers = transfersFromSplitRows(splitRows);
+  const paymentRows = group.payments.map((p) => ({
+    amount: p.amount.toString(), fromUserId: p.fromUserId, toUserId: p.toUserId,
+  }));
+  // Payments net against splits (src/lib/split.ts), so balances and the
+  // settle-up list both reflect what has actually been paid.
+  const balances = netBalances(netInputs(splitRows, paymentRows));
+  const transfers = transfersFromSplitRows(splitRows, paymentRows);
   const money = (cents: number) => formatUSD(cents / 100);
 
   return (
@@ -72,10 +76,20 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
             <>
               <ul className="space-y-1 text-sm">
                 {transfers.map((t, i) => (
-                  <li key={i}>
-                    <span className="font-medium">{nameOf.get(t.fromUserId)}</span> pays{" "}
-                    <span className="font-medium">{nameOf.get(t.toUserId)}</span>{" "}
-                    <span className="tabular-nums">{money(t.amountCents)}</span>
+                  <li key={i} className="flex items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">{nameOf.get(t.fromUserId)}</span> pays{" "}
+                      <span className="font-medium">{nameOf.get(t.toUserId)}</span>{" "}
+                      <span className="tabular-nums">{money(t.amountCents)}</span>
+                    </span>
+                    {/* One click records exactly this transfer as paid. */}
+                    <form action={recordPayment}>
+                      <input type="hidden" name="groupId" value={group.id} />
+                      <input type="hidden" name="fromUserId" value={t.fromUserId} />
+                      <input type="hidden" name="toUserId" value={t.toUserId} />
+                      <input type="hidden" name="amount" value={centsToDecimalString(t.amountCents)} />
+                      <button className="rounded border border-zinc-300 px-2 py-0.5 text-xs">paid</button>
+                    </form>
                   </li>
                 ))}
               </ul>
@@ -133,6 +147,34 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
                 <div className="text-xs text-zinc-500">
                   {e.splits.map((s) => `${s.owedBy.name} owes ${formatUSD(s.amount)}${s.settled ? " (settled)" : ""}`).join(" · ") || "no one else owes anything"}
                 </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mb-10">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-500">Record a payment</h2>
+        <form action={recordPayment} className="flex flex-wrap items-center gap-2 text-sm">
+          <input type="hidden" name="groupId" value={group.id} />
+          <select name="fromUserId" className="rounded border border-zinc-300 px-2 py-1.5">
+            {group.members.map((m) => <option key={m.userId} value={m.userId}>{m.user.name}</option>)}
+          </select>
+          <span className="text-zinc-500">paid</span>
+          <select name="toUserId" defaultValue={me.id} className="rounded border border-zinc-300 px-2 py-1.5">
+            {group.members.map((m) => <option key={m.userId} value={m.userId}>{m.user.name}</option>)}
+          </select>
+          <input name="amount" placeholder="14.20" inputMode="decimal" required
+            className="w-24 rounded border border-zinc-300 px-2 py-1.5" />
+          <button className="rounded bg-zinc-900 px-3 py-1.5 text-white">Record</button>
+        </form>
+        {group.payments.length > 0 && (
+          <ul className="mt-3 space-y-1 text-xs text-zinc-500">
+            {group.payments.map((p) => (
+              <li key={p.id}>
+                {nameOf.get(p.fromUserId)} paid {nameOf.get(p.toUserId)}{" "}
+                <span className="tabular-nums">{formatUSD(p.amount)}</span>{" "}
+                · {p.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </li>
             ))}
           </ul>
