@@ -677,3 +677,34 @@ current cap, and the suggested cap with a one-click "use $115.00" button
 
 **Do now:** `npm run dev`, open /plan, and compare one row's suggestion
 to your own hand calculation.
+
+---
+
+## Day 13 (2026-10-19): Payments as facts
+
+**What we built:** a `Payment` table (group, from, to, amount, time)
+with its migration, and `paymentsAsSplits` / `netInputs` in
+`src/lib/split.ts` so recorded payments enter the same netting as the
+splits. 5 new tests: full payment, partial payment, everything paid,
+overpayment, and the direction of the mapping.
+
+**The concepts:**
+
+- **A payment is a split in reverse.** If A owes B $20, A's balance is
+  -20 and B's is +20. A payment of $20 from A to B must move A up and B
+  down by 20 - which is exactly what a split "A paid, B owes" does. So a
+  payment becomes one more input row to `netBalances`, and the settle-up
+  algorithm from Day 4 needs no changes at all.
+
+- **Partial and over-payments fall out for free.** Pay $4.50 of $10 and
+  $5.50 remains. Pay $15 of $10 and the direction flips: now B owes A $5.
+  Neither needed special-case code, because nothing is stored except the
+  facts. Day 7's "Mark everything settled" button is now the blunt
+  instrument; recording what was actually paid is the precise one.
+
+- **Still no stored balance.** It would be tempting to keep a balance
+  column and decrement it on payment. Then a deleted expense or an edited
+  split would leave it wrong forever. Facts in, conclusions computed:
+  Day 1's rule, holding for the fourth time.
+
+**Do now:** `npm test`, then work the overpayment test by hand.

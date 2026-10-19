@@ -23,6 +23,8 @@ model User {
   budgets      Budget[]
   groupMembers GroupMember[]
   owedSplits   Split[]       @relation("SplitOwedBy")
+  paymentsSent     Payment[] @relation("PaymentFrom")
+  paymentsReceived Payment[] @relation("PaymentTo")
 }
 
 // A spending category: Food, Delivery, Transport, Gas, Rent,
@@ -94,6 +96,7 @@ model Group {
 
   members  GroupMember[]
   expenses Expense[]
+  payments Payment[]
 }
 
 model GroupMember {
@@ -121,4 +124,23 @@ model Split {
   owedBy    User    @relation("SplitOwedBy", fields: [owedById], references: [id])
 
   @@unique([expenseId, owedById])
+}
+
+// A real transfer of money between two group members: "Aditi paid me
+// $14.20". Payments are facts; balances are still computed, never
+// stored - a payment simply enters the same netting as the splits
+// (see src/lib/split.ts, paymentsAsSplits).
+model Payment {
+  id        String   @id @default(cuid())
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  groupId    String
+  group      Group  @relation(fields: [groupId], references: [id])
+  fromUserId String
+  fromUser   User   @relation("PaymentFrom", fields: [fromUserId], references: [id])
+  toUserId   String
+  toUser     User   @relation("PaymentTo", fields: [toUserId], references: [id])
+
+  @@index([groupId])
 }

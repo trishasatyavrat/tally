@@ -24,14 +24,35 @@ export function decimalStringToCents(s: string): number {
 }
 
 export type SplitRow = { amount: string; owedById: string; settled: boolean; expense: { userId: string } };
+export type PaymentRow = { amount: string; fromUserId: string; toUserId: string };
+type NetInput = { paidByUserId: string; owedByUserId: string; amountCents: number };
 
-/** Unsettled Split rows -> who should pay whom. */
-export function transfersFromSplitRows(rows: SplitRow[]): Transfer[] {
-  return settleFromSplits(
-    rows.filter((r) => !r.settled).map((r) => ({
+/**
+ * A payment from A to B is netted exactly like a split where A paid for
+ * B: A's balance goes up by the amount, B's goes down. If A owed B $20
+ * and pays $20, A's -20 and B's +20 both return to zero. One netting
+ * function, two kinds of facts.
+ */
+export function paymentsAsSplits(payments: PaymentRow[]): NetInput[] {
+  return payments.map((p) => ({
+    paidByUserId: p.fromUserId,
+    owedByUserId: p.toUserId,
+    amountCents: decimalStringToCents(p.amount),
+  }));
+}
+
+export function netInputs(rows: SplitRow[], payments: PaymentRow[] = []): NetInput[] {
+  return [
+    ...rows.filter((r) => !r.settled).map((r) => ({
       paidByUserId: r.expense.userId,
       owedByUserId: r.owedById,
       amountCents: decimalStringToCents(r.amount),
-    }))
-  );
+    })),
+    ...paymentsAsSplits(payments),
+  ];
+}
+
+/** Unsettled Split rows plus recorded payments -> who should still pay whom. */
+export function transfersFromSplitRows(rows: SplitRow[], payments: PaymentRow[] = []): Transfer[] {
+  return settleFromSplits(netInputs(rows, payments));
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { equalSplitCents, decimalStringToCents, transfersFromSplitRows } from "./split";
+import { equalSplitCents, decimalStringToCents, transfersFromSplitRows, paymentsAsSplits } from "./split";
+import { netBalances } from "./settle";
 
 describe("equalSplitCents", () => {
   it("hands out remainder cents so shares always sum to the total", () => {
@@ -37,5 +38,43 @@ describe("transfersFromSplitRows", () => {
       { amount: "99.00", owedById: "C", settled: true, expense: { userId: "A" } },
     ];
     expect(transfersFromSplitRows(rows)).toEqual([{ fromUserId: "C", toUserId: "A", amountCents: 1000 }]);
+  });
+});
+
+describe("payments", () => {
+  const dinner = [ // A paid $30 for three: B and C owe A $10 each
+    { amount: "10.00", owedById: "B", settled: false, expense: { userId: "A" } },
+    { amount: "10.00", owedById: "C", settled: false, expense: { userId: "A" } },
+  ];
+
+  it("a full payment clears exactly that debt", () => {
+    const t = transfersFromSplitRows(dinner, [{ amount: "10.00", fromUserId: "B", toUserId: "A" }]);
+    expect(t).toEqual([{ fromUserId: "C", toUserId: "A", amountCents: 1000 }]);
+  });
+
+  it("a partial payment leaves the remainder", () => {
+    const t = transfersFromSplitRows(dinner, [{ amount: "4.50", fromUserId: "C", toUserId: "A" }]);
+    expect(t).toContainEqual({ fromUserId: "C", toUserId: "A", amountCents: 550 });
+    expect(t).toContainEqual({ fromUserId: "B", toUserId: "A", amountCents: 1000 });
+  });
+
+  it("paying everything brings every balance to zero", () => {
+    const pays = [
+      { amount: "10.00", fromUserId: "B", toUserId: "A" },
+      { amount: "10.00", fromUserId: "C", toUserId: "A" },
+    ];
+    expect(transfersFromSplitRows(dinner, pays)).toEqual([]);
+  });
+
+  it("an overpayment flips the direction instead of disappearing", () => {
+    const t = transfersFromSplitRows(dinner.slice(0, 1), [{ amount: "15.00", fromUserId: "B", toUserId: "A" }]);
+    expect(t).toEqual([{ fromUserId: "A", toUserId: "B", amountCents: 500 }]);
+  });
+
+  it("maps a payment to a split in the paying direction", () => {
+    expect(paymentsAsSplits([{ amount: "2.00", fromUserId: "X", toUserId: "Y" }]))
+      .toEqual([{ paidByUserId: "X", owedByUserId: "Y", amountCents: 200 }]);
+    expect(netBalances(paymentsAsSplits([{ amount: "2.00", fromUserId: "X", toUserId: "Y" }])))
+      .toEqual([{ userId: "X", amountCents: 200 }, { userId: "Y", amountCents: -200 }]);
   });
 });
